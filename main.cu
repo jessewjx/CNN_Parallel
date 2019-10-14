@@ -12,9 +12,12 @@ static unsigned int train_cnt, test_cnt;
 
 // Define layers of CNN
 static Layer l_input = Layer(0, 0, 28*28);
-static Layer l_c1 = Layer(5*5, 6, 24*24*6);//convolutional layer
-static Layer l_s1 = Layer(4*4, 1, 6*6*6); //pooling
-static Layer l_f = Layer(6*6*6, 10, 10);
+static Layer l_c1 = Layer(11*11, 3, 18*18*3);//convolutional layer
+static Layer l_c2 = Layer(7*7, 3, 12*12*3); //
+static Layer l_s1 = Layer(4*4, 1, 3*3*3); //pooling
+static Layer l_f = Layer(3*3*3, 10, 10);
+// static Layer l_d1 = Layer(10,10,10); //my neural network
+// static Layer l_d2 = Layer(3,10,10);
 
 static void learn();
 static unsigned int classify(double data[28][28]);
@@ -60,8 +63,10 @@ static double forward_pass(double data[28][28])
 
 	l_input.clear();
 	l_c1.clear();
+	l_c2.clear();
 	l_s1.clear();
 	l_f.clear();
+	// l_d1.clear();
 
 	clock_t start, end;
 	start = clock();
@@ -70,20 +75,26 @@ static double forward_pass(double data[28][28])
 	datasize[0] = 28;
 	l_input.setOutput((float *)input,(int *)datasize);
 
-	fp_preact_c1<<<64, 64>>>((float*) l_input.output, (float*) l_c1.preact, (float*) l_c1.weight, l_c1.preactsize,28,5,6);
-	fp_bias_c1<<<64, 64>>>((float*)l_c1.preact, l_c1.bias,l_c1.preactsize, 6);
+	fp_preact_c1<<<64, 64>>>((float*) l_input.output, (float*) l_c1.preact, (float*) l_c1.weight, l_c1.preactsize,l_input.preactsize,11,3);
+	fp_bias_c1<<<64, 64>>>((float*)l_c1.preact, l_c1.bias,l_c1.preactsize, 3);
 	apply_step_function<<<64, 64>>>(l_c1.preact, l_c1.output, l_c1.O);
 
-	fp_preact_s1<<<64, 64>>>((float*)l_c1.output, (float*)l_s1.preact, (float*)l_s1.weight,l_s1.preactsize,l_c1.preactsize,l_c1.N,4);
-	fp_bias_s1<<<64, 64>>>((float*)l_s1.preact, l_s1.bias, l_s1.preactsize,l_c1.N);
+	fp_preact_c1<<<64, 64>>>((float*) l_c1.output, (float*) l_c2.preact, (float*) l_c2.weight, l_c2.preactsize,l_c1.preactsize,7,l_c2.N);
+	fp_bias_c1<<<64, 64>>>((float*)l_c2.preact, l_c2.bias,l_c2.preactsize, l_c2.N);
+	apply_step_function<<<64, 64>>>(l_c2.preact, l_c2.output, l_c2.O);
+
+	fp_preact_s1<<<64, 64>>>((float*)l_c2.output, (float*)l_s1.preact, (float*)l_s1.weight,l_s1.preactsize,l_c2.preactsize,l_c2.N,4);
+	fp_bias_s1<<<64, 64>>>((float*)l_s1.preact, l_s1.bias, l_s1.preactsize,l_c2.N);
 	apply_step_function<<<64, 64>>>(l_s1.preact, l_s1.output, l_s1.O);
 
-	// printf("%d  \n", l_s1.O);
-	// int last_nodes = l_s1.O/((*l_s1.preactsize) * (*l_s1.preactsize));
-	// printf("%d\n", last_nodes);
-	fp_preact_f<<<64, 64>>>((float* )l_s1.output, l_f.preact, (float*)l_f.weight, l_s1.preactsize, l_c1.N,l_f.O);
+	fp_preact_f<<<64, 64>>>((float* )l_s1.output, l_f.preact, (float*)l_f.weight, l_s1.preactsize, l_c2.N,l_f.O,l_f.preactsize);
 	fp_bias_f<<<64, 64>>>(l_f.preact, l_f.bias,l_f.O);
 	apply_step_function<<<64, 64>>>(l_f.preact, l_f.output, l_f.O);
+
+	// fp_preact_dense<<<64, 64>>>((float*) l_f.output, (float*) l_d1.preact, (float*) l_d1.weight, l_d1.preactsize,l_f.preactsize,10,10);
+	// fp_bias_dense<<<64, 64>>>((float*)l_d1.preact, l_d1.bias,l_d1.preactsize, 10);
+	// apply_step_function<<<64, 64>>>(l_d1.preact, l_d1.output, l_d1.O);
+
 
 	end = clock();
 	return ((double) (end - start)) / CLOCKS_PER_SEC;
@@ -96,23 +107,36 @@ static double back_pass()
 
 	start = clock();
 
-	bp_weight_f<<<64, 64>>>((float*)l_f.d_weight, l_f.d_preact, (float*)l_s1.output, l_f.O, l_c1.N,l_s1.preactsize);
+
+	// bp_weight_dense<<<64, 64>>>((float*)l_d1.d_weight, (float*)l_d1.d_preact, (float*)l_f.output,l_d1.N,10,l_d1.preactsize,l_f.preactsize);
+	// bp_bias_dense<<<64, 64>>>(l_d1.bias, (float*)l_d1.d_preact, l_d1.N, l_d1.preactsize);
+	//
+	// bp_output_dense<<<64, 64>>>((float*)l_f.d_output, (float*)l_d1.weight, (float*)l_d1.d_preact, l_d1.N,10,l_f.N,l_d1.preactsize,l_f.preactsize);
+	// bp_preact_dense<<<64, 64>>>((float*)l_f.d_preact, (float*)l_f.d_output, (float*)l_f.preact,l_f.N,l_f.preactsize);
+	bp_weight_f<<<64, 64>>>((float*)l_f.d_weight, l_f.d_preact, (float*)l_s1.output, l_f.O, l_c2.N,l_s1.preactsize);
 	bp_bias_f<<<64, 64>>>(l_f.bias, l_f.d_preact,l_f.O);
 
-	bp_output_s1<<<64, 64>>>((float*)l_s1.d_output, (float*)l_f.weight, l_f.d_preact, l_f.O,l_c1.N,l_s1.preactsize);
-	bp_preact_s1<<<64, 64>>>((float*)l_s1.d_preact, (float*)l_s1.d_output, (float*)l_s1.preact, l_c1.N,l_s1.preactsize);
-	bp_weight_s1<<<64, 64>>>((float*)l_s1.d_weight, (float*)l_s1.d_preact, (float*)l_c1.output, l_s1.N,4,l_c1.N,l_s1.preactsize,l_c1.preactsize);
-	bp_bias_s1<<<64, 64>>>(l_s1.bias, (float*)l_s1.d_preact, l_c1.N, l_s1.preactsize);
+	bp_output_s1<<<64, 64>>>((float*)l_s1.d_output, (float*)l_f.weight, l_f.d_preact, l_f.O,l_c2.N,l_s1.preactsize);
+	bp_preact_s1<<<64, 64>>>((float*)l_s1.d_preact, (float*)l_s1.d_output, (float*)l_s1.preact, l_c2.N,l_s1.preactsize);
+	bp_weight_s1<<<64, 64>>>((float*)l_s1.d_weight, (float*)l_s1.d_preact, (float*)l_c2.output, l_s1.N,4,l_c2.N,l_s1.preactsize,l_c2.preactsize);
+	bp_bias_s1<<<64, 64>>>(l_s1.bias, (float*)l_s1.d_preact, l_c2.N, l_s1.preactsize);
 
-	bp_output_c1<<<64, 64>>>((float*)l_c1.d_output, (float*)l_s1.weight, (float*)l_s1.d_preact, l_s1.N,4,l_c1.N,l_s1.preactsize,l_c1.preactsize);
+	bp_output_c1<<<64, 64>>>((float*)l_c2.d_output, (float*)l_s1.weight, (float*)l_s1.d_preact, l_s1.N,4,l_c2.N,l_s1.preactsize,l_c2.preactsize);
+	bp_preact_c1<<<64, 64>>>((float*)l_c2.d_preact, (float*)l_c2.d_output, (float*)l_c2.preact,l_c2.N,l_c2.preactsize);
+	bp_weight_c1<<<64, 64>>>((float*)l_c2.d_weight, (float*)l_c2.d_preact, (float*)l_input.output,l_c2.N,7,l_c2.preactsize,l_input.preactsize);
+	bp_bias_c1<<<64, 64>>>(l_c2.bias, (float*)l_c2.d_preact, l_c2.N, l_c2.preactsize);
+
+	bp_output_c1<<<64, 64>>>((float*)l_c1.d_output, (float*)l_c2.weight, (float*)l_c2.d_preact, l_c2.N,7,l_c1.N,l_c2.preactsize,l_c1.preactsize);
 	bp_preact_c1<<<64, 64>>>((float*)l_c1.d_preact, (float*)l_c1.d_output, (float*)l_c1.preact,l_c1.N,l_c1.preactsize);
-	bp_weight_c1<<<64, 64>>>((float*)l_c1.d_weight, (float*)l_c1.d_preact, (float*)l_input.output,l_c1.N,5,l_c1.preactsize,l_input.preactsize);
+	bp_weight_c1<<<64, 64>>>((float*)l_c1.d_weight, (float*)l_c1.d_preact, (float*)l_input.output,l_c1.N,11,l_c1.preactsize,l_input.preactsize);
 	bp_bias_c1<<<64, 64>>>(l_c1.bias, (float*)l_c1.d_preact, l_c1.N, l_c1.preactsize);
 
-
+	// apply_grad<<<64, 64>>>(l_d1.weight, l_d1.d_weight, l_d1.M * l_d1.N);
 	apply_grad<<<64, 64>>>(l_f.weight, l_f.d_weight, l_f.M * l_f.N);
 	apply_grad<<<64, 64>>>(l_s1.weight, l_s1.d_weight, l_s1.M * l_s1.N);
+	apply_grad<<<64, 64>>>(l_c2.weight, l_c2.d_weight, l_c2.M * l_c2.N);
 	apply_grad<<<64, 64>>>(l_c1.weight, l_c1.d_weight, l_c1.M * l_c1.N);
+
 
 	end = clock();
 	return ((double) (end - start)) / CLOCKS_PER_SEC;
@@ -140,7 +164,7 @@ static void learn()
 	cublasCreate(&blas);
 
 	float err;
-	int iter = 50;
+	int iter = 20;
 
 	double time_taken = 0.0;
 
@@ -153,9 +177,10 @@ static void learn()
 			float tmp_err;
 
 			time_taken += forward_pass(train_set[i].data);
-
+			// l_d1.bp_clear();
 			l_f.bp_clear();
 			l_s1.bp_clear();
+			l_c2.bp_clear();
 			l_c1.bp_clear();
 
 			// Euclid distance of train_set[i]

@@ -97,7 +97,6 @@ _STATIC int mnist_load(
 		goto cleanup;
 	}
 
-    /*Read the magic number*/
 	fread(tmp, 1, 4, ifp);
 	if (mnist_bin_to_int(tmp) != 2051) {
 		return_code = -2; /* Not a valid image file */
@@ -109,7 +108,7 @@ _STATIC int mnist_load(
 		return_code = -3; /* Not a valid label file */
 		goto cleanup;
 	}
-	/*Read the number of images*/
+
 	fread(tmp, 1, 4, ifp);
 	image_cnt = mnist_bin_to_int(tmp);
 
@@ -121,7 +120,6 @@ _STATIC int mnist_load(
 		goto cleanup;
 	}
 
-	/*Verify the size of images*/
 	for (i = 0; i < 2; ++i) {
 		fread(tmp, 1, 4, ifp);
 		image_dim[i] = mnist_bin_to_int(tmp);
@@ -141,8 +139,7 @@ _STATIC int mnist_load(
 		mnist_data *d = &(*data)[i];
 
 		fread(read_data, 1, 28*28, ifp);
-		
-	/*Standarization*/
+
 #ifdef MNIST_DOUBLE
 		for (j = 0; j < 28*28; ++j) {
 			d->data[j/28][j%28] = read_data[j] / 255.0;
